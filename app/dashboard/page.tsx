@@ -11,11 +11,12 @@ type Student = {
   task: string;
   deadline: string;
   github?: string;
-  status: "pending" | "underReview" | "reviewed";
+  status: "pending" | "underReview" | "reviewed" | "notReviewed";
 };
 
 export default function AdminDashboard() {
   const router = useRouter();
+
   const [students, setStudents] = useState<Student[]>([]);
   const [newStudent, setNewStudent] = useState({
     name: "",
@@ -24,26 +25,72 @@ export default function AdminDashboard() {
     github: "",
   });
 
-  const BASE_URL = "http://localhost:3001/api/students";
+  // 🧩 Current Task State
+  const [currentTask, setCurrentTask] = useState("");
+  const [editingTask, setEditingTask] = useState("");
 
-  // ✅ Fetch students from backend
-  useEffect(() => {
-    async function fetchStudents() {
-      try {
-        const res = await axios.get(BASE_URL);
+  const BASE_URL = "http://localhost:3001/api/students";
+  const TASK_URL = "http://localhost:3001/api/task";
+
+  // ✅ Fetch all students
+  async function fetchStudents() {
+    try {
+      const res = await axios.get(BASE_URL);
+      if (Array.isArray(res.data)) {
         setStudents(res.data);
-      } catch (err) {
-        console.error("Error fetching students:", err);
+      } else {
+        console.error("Invalid data:", res.data);
       }
+    } catch (err) {
+      console.error("Error fetching students:", err);
     }
+  }
+
+  // ✅ Fetch Current Task
+  async function fetchCurrentTask() {
+  try {
+    const res = await axios.get(TASK_URL);
+    const latestTask = res.data.currentTask || "No current task set";
+    setCurrentTask(latestTask);
+
+    // 🧠 Only update the editing field if the admin is NOT currently typing something new
+    setEditingTask((prev) => (prev.trim() === "" || prev === currentTask ? latestTask : prev));
+  } catch (err) {
+    console.error("Error fetching current task:", err);
+  }
+}
+
+
+  // ✅ Update Current Task
+  async function updateCurrentTask() {
+    if (!editingTask.trim()) return alert("Please enter a valid task.");
+    try {
+      const res = await axios.patch(TASK_URL, { currentTask: editingTask });
+      if (res.data.success) {
+        setCurrentTask(editingTask);
+        alert("✅ Current task updated successfully!");
+      }
+    } catch (err) {
+      console.error("Error updating current task:", err);
+    }
+  }
+
+  // ✅ Initialize fetchers
+  useEffect(() => {
     fetchStudents();
+    fetchCurrentTask();
+    const interval = setInterval(() => {
+      fetchStudents();
+      fetchCurrentTask();
+    }, 10000); // auto-refresh
+    return () => clearInterval(interval);
   }, []);
 
   // ✅ Add new student
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStudent.name || !newStudent.task || !newStudent.deadline)
-      return alert("Please fill all fields.");
+      return alert("Please fill all required fields.");
 
     try {
       const res = await axios.post(BASE_URL, newStudent);
@@ -56,7 +103,7 @@ export default function AdminDashboard() {
     }
   };
 
-  // ✅ Update status or GitHub ID
+  // ✅ Update student (status or GitHub)
   const updateStudent = async (
     id: string,
     field: "status" | "github",
@@ -68,6 +115,8 @@ export default function AdminDashboard() {
         setStudents((prev) =>
           prev.map((s) => (s._id === id ? res.data.student : s))
         );
+      } else {
+        console.error("Failed to update:", res.data.message);
       }
     } catch (err) {
       console.error("Error updating student:", err);
@@ -97,7 +146,7 @@ export default function AdminDashboard() {
     <main className="min-h-screen bg-gray-50 text-gray-900 font-[Poppins] p-6">
       {/* Header */}
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-blue-600">
+        <h1 className="text-3xl font-bold text-black-600">
           CodeMinds Admin Dashboard
         </h1>
         <button
@@ -108,7 +157,39 @@ export default function AdminDashboard() {
         </button>
       </div>
 
-      {/* Add Student Section */}
+      {/* 🧩 Current Task Editor */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="bg-white shadow-md rounded-2xl p-6 mb-8 border"
+      >
+        <h2 className="text-xl font-semibold mb-3">🧩 Set Current Task (Visible to All Students)</h2>
+<div className="flex flex-col md:flex-row items-center gap-3">
+  <input
+    type="text"
+    value={editingTask}
+    onChange={(e) => setEditingTask(e.target.value)}
+    placeholder="Enter or update current task..."
+    className="flex-1 border rounded-lg p-3 focus:ring-2 focus:ring-blue-500"
+  />
+  <motion.button
+    whileHover={{ scale: 1.05 }}
+    whileTap={{ scale: 0.95 }}
+    onClick={updateCurrentTask}
+    className="bg-blue-600 text-white px-6 py-3 rounded-lg shadow hover:bg-blue-700 transition"
+  >
+    Save Task
+  </motion.button>
+</div>
+<p className="text-gray-600 mt-3">
+  <span className="font-semibold">Current Task:</span>{" "}
+  <span className="text-blue-600 font-medium">{currentTask}</span>
+</p>
+
+      </motion.div>
+
+      {/* ➕ Add Student */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -178,60 +259,83 @@ export default function AdminDashboard() {
             </tr>
           </thead>
           <tbody>
-            {students.map((student) => (
-              <tr
-                key={student._id}
-                className="border-b hover:bg-gray-50 transition-all"
-              >
-                <td className="p-4 font-medium">{student.name}</td>
-                <td className="p-4">{student.task}</td>
-                <td className="p-4">{student.deadline}</td>
-                <td className="p-4">
-                  <input
-                    type="text"
-                    defaultValue={student.github}
-                    placeholder="GitHub ID"
-                    className="border rounded-lg p-1 text-sm w-40"
-                    onBlur={(e) =>
-                      updateStudent(student._id, "github", e.target.value)
-                    }
-                  />
-                </td>
-                <td
-                  className={`p-4 font-semibold ${
-                    student.status === "underReview"
-                      ? "text-yellow-500"
-                      : student.status === "reviewed"
-                      ? "text-green-600"
-                      : "text-gray-500"
-                  }`}
+            {students.map((student) => {
+              const canChangeStatus =
+                student.status === "underReview" ||
+                student.status === "notReviewed";
+
+              return (
+                <tr
+                  key={student._id}
+                  className="border-b hover:bg-gray-50 transition-all"
                 >
-                  <select
-                    value={student.status}
-                    onChange={(e) =>
-                      updateStudent(
-                        student._id,
-                        "status",
-                        e.target.value as Student["status"]
-                      )
-                    }
-                    className="border rounded-lg p-2 text-sm focus:ring-2 focus:ring-green-500"
+                  <td className="p-4 font-medium">{student.name}</td>
+                  <td className="p-4">{student.task}</td>
+                  <td className="p-4">{student.deadline}</td>
+
+                  {/* GitHub field locked for admin */}
+                  <td className="p-4">
+                    <input
+                      type="text"
+                      value={student.github || ""}
+                      readOnly
+                      className="border rounded-lg p-1 text-sm w-40 bg-gray-100 text-gray-600 cursor-not-allowed"
+                    />
+                  </td>
+
+                  {/* Status Control */}
+                  <td
+                    className={`p-4 font-semibold ${
+                      student.status === "underReview"
+                        ? "text-yellow-500"
+                        : student.status === "reviewed"
+                        ? "text-green-600"
+                        : "text-gray-500"
+                    }`}
                   >
-                    <option value="pending">Pending</option>
-                    <option value="underReview">Under Review</option>
-                    <option value="reviewed">Reviewed</option>
-                  </select>
-                </td>
-                <td className="p-4 text-center">
-                  <button
-                    onClick={() => handleDelete(student._id)}
-                    className="px-3 py-1 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition"
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
+                    <select
+                      value={student.status}
+                      onChange={(e) =>
+                        updateStudent(
+                          student._id,
+                          "status",
+                          e.target.value as Student["status"]
+                        )
+                      }
+                      disabled={!canChangeStatus}
+                      className={`border rounded-lg p-2 text-sm ${
+                        canChangeStatus
+                          ? "focus:ring-2 focus:ring-green-500 bg-white"
+                          : "bg-gray-100 text-gray-500 cursor-not-allowed"
+                      }`}
+                    >
+                      {student.status === "pending" && (
+                        <option value="pending">Pending</option>
+                      )}
+                      {student.status === "underReview" && (
+                        <>
+                          <option value="underReview">Under Review</option>
+                          <option value="reviewed">Reviewed</option>
+                        </>
+                      )}
+                      {student.status === "reviewed" && (
+                        <option value="reviewed">Reviewed ✅</option>
+                      )}
+                    </select>
+                  </td>
+
+                  {/* Delete button */}
+                  <td className="p-4 text-center">
+                    <button
+                      onClick={() => handleDelete(student._id)}
+                      className="px-3 py-1 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
