@@ -29,8 +29,8 @@ export default function AdminDashboard() {
   const [currentTask, setCurrentTask] = useState("");
   const [editingTask, setEditingTask] = useState("");
 
-  const BASE_URL = "http://localhost:3001/api/students";
-  const TASK_URL = "http://localhost:3001/api/task";
+  const BASE_URL = "https://codeminds-admin.vercel.app/api/students";
+const TASK_URL = "https://codeminds-admin.vercel.app/api/task";
 
   // ✅ Fetch all students
   async function fetchStudents() {
