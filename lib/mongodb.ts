@@ -3,19 +3,38 @@ import mongoose from "mongoose";
 const MONGODB_URI = process.env.MONGODB_URI as string;
 
 if (!MONGODB_URI) {
-  throw new Error("❌ MONGODB_URI is missing in environment variables");
+  throw new Error("❌ MONGODB_URI is missing in environment variables.");
 }
 
-let isConnected = false;
+/**
+ * Global caching is essential for serverless environments (like Vercel)
+ * because a new function instance might start up for every request.
+ * Without this, you'd reconnect to MongoDB repeatedly — causing timeouts.
+ */
+let cached = (global as any).mongoose;
 
-export const connectToDatabase = async () => {
-  if (isConnected) return;
+if (!cached) {
+  cached = (global as any).mongoose = { conn: null, promise: null };
+}
 
-  try {
-    await mongoose.connect(MONGODB_URI);
-    isConnected = true;
-    console.log("✅ MongoDB connected successfully");
-  } catch (error) {
-    console.error("❌ MongoDB connection failed", error);
+export async function connectToDatabase() {
+  if (cached.conn) return cached.conn;
+
+  if (!cached.promise) {
+    cached.promise = mongoose
+      .connect(MONGODB_URI, {
+        bufferCommands: false,
+      })
+      .then((mongoose) => {
+        console.log("✅ MongoDB connected successfully");
+        return mongoose;
+      })
+      .catch((err) => {
+        console.error("❌ MongoDB connection error:", err);
+        throw err;
+      });
   }
-};
+
+  cached.conn = await cached.promise;
+  return cached.conn;
+}
