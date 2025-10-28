@@ -2,84 +2,64 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import Student from "@/lib/models/Student";
 
+const ALLOWED_ORIGIN = "https://codeminds-student-panel.vercel.app"; // ✅ Replace with your student panel domain
+
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*", // later: "https://codeminds-student-panel.vercel.app"
+  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
   "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
+// ✅ Helper: wrap all responses with CORS headers
+function withCORS(json: any, status = 200) {
+  return NextResponse.json(json, { status, headers: corsHeaders });
+}
+
 // ✅ Handle CORS preflight
 export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+  return withCORS({});
 }
 
 // ✅ PATCH → update student by ID
 export async function PATCH(req: Request, context: any) {
-  const { id } = context.params; // ✅ no await here
+  const { id } = context.params;
   console.log("🟠 PATCH /api/students/[id] called, id =", id);
 
-  await connectToDatabase();
+  try {
+    await connectToDatabase();
+  } catch (err) {
+    console.error("❌ Database connection failed:", err);
+    return withCORS({ success: false, message: "DB connection error" }, 500);
+  }
 
   try {
     const body = await req.json();
     console.log("📦 Request body:", body);
 
     const existing = await Student.findById(id);
-    if (!existing) {
-      return NextResponse.json(
-        { success: false, message: "Student not found" },
-        { status: 404, headers: corsHeaders }
-      );
-    }
+    if (!existing) return withCORS({ success: false, message: "Student not found" }, 404);
 
-    // 🔒 Prevent overwriting GitHub once set
+    // 🔒 GitHub lock
     if (body.github && existing.github?.trim() !== "") {
-      return NextResponse.json(
-        { success: false, message: "GitHub ID already locked 🔒" },
-        { status: 400, headers: corsHeaders }
-      );
+      return withCORS({ success: false, message: "GitHub ID already locked 🔒" }, 400);
     }
 
-    // 🔒 Prevent reverting status backwards
-    if (existing.status === "underReview" && body.status === "pending") {
-      return NextResponse.json(
-        { success: false, message: "Cannot revert to pending" },
-        { status: 400, headers: corsHeaders }
-      );
-    }
+    // 🔒 Prevent revert or invalid transitions
+    if (existing.status === "underReview" && body.status === "pending")
+      return withCORS({ success: false, message: "Cannot revert to pending" }, 400);
 
-    if (existing.status === "reviewed") {
-      return NextResponse.json(
-        { success: false, message: "Reviewed student is locked 🔒" },
-        { status: 400, headers: corsHeaders }
-      );
-    }
+    if (existing.status === "reviewed")
+      return withCORS({ success: false, message: "Reviewed student is locked 🔒" }, 400);
 
-    // 🔒 Prevent skipping directly from pending → reviewed
-    if (existing.status === "pending" && body.status === "reviewed") {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Student must first go underReview before reviewed",
-        },
-        { status: 400, headers: corsHeaders }
-      );
-    }
+    if (existing.status === "pending" && body.status === "reviewed")
+      return withCORS({ success: false, message: "Must go underReview before reviewed" }, 400);
 
-    // ✅ Allowed transitions:
-    // - pending → underReview (student action)
-    // - underReview → reviewed (admin action)
     const allowed =
       (existing.status === "pending" && body.status === "underReview") ||
       (existing.status === "underReview" && body.status === "reviewed") ||
       body.github;
 
-    if (!allowed) {
-      return NextResponse.json(
-        { success: false, message: "Invalid status transition" },
-        { status: 400, headers: corsHeaders }
-      );
-    }
+    if (!allowed) return withCORS({ success: false, message: "Invalid status transition" }, 400);
 
     // ✅ Update document
     if (body.github) existing.github = body.github;
@@ -88,16 +68,10 @@ export async function PATCH(req: Request, context: any) {
     await existing.save();
 
     console.log("✅ Student updated successfully:", existing._id);
-    return NextResponse.json(
-      { success: true, student: existing },
-      { headers: corsHeaders }
-    );
+    return withCORS({ success: true, student: existing });
   } catch (error) {
     console.error("💥 PATCH error:", error);
-    return NextResponse.json(
-      { success: false, message: "Server error" },
-      { status: 500, headers: corsHeaders }
-    );
+    return withCORS({ success: false, message: "Server error" }, 500);
   }
 }
 
@@ -106,27 +80,28 @@ export async function DELETE(req: Request, context: any) {
   const { id } = context.params;
   console.log("🧨 DELETE /api/students/[id], id =", id);
 
-  await connectToDatabase();
+  try {
+    await connectToDatabase();
+  } catch (err) {
+    console.error("❌ Database connection failed:", err);
+    return withCORS({ success: false, message: "DB connection error" }, 500);
+  }
 
   try {
     const deleted = await Student.findByIdAndDelete(id);
-    if (!deleted) {
-      return NextResponse.json(
-        { success: false, message: "Student not found" },
-        { status: 404, headers: corsHeaders }
-      );
-    }
+    if (!deleted) return withCORS({ success: false, message: "Student not found" }, 404);
 
     console.log("🗑️ Deleted student:", deleted._id);
-    return NextResponse.json(
-      { success: true, deleted },
-      { headers: corsHeaders }
-    );
+    return withCORS({ success: true, deleted });
   } catch (error) {
     console.error("💥 DELETE error:", error);
-    return NextResponse.json(
-      { success: false, message: "Delete failed" },
-      { status: 500, headers: corsHeaders }
-    );
+    return withCORS({ success: false, message: "Delete failed" }, 500);
   }
 }
+
+// ✅ Fallback: ensure all responses have CORS
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
