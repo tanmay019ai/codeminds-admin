@@ -2,35 +2,41 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import Student from "@/lib/models/Student";
 
-// ✅ CORS headers (temporarily allow all)
+// ✅ Allowed origin (your student panel domain)
+const ALLOWED_ORIGIN = "https://codeminds-student-panel.vercel.app";
+
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*", // Later: replace * with your student domain
+  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-// ✅ Always handle preflight CORS
+// ✅ Helper to ensure every response includes CORS
+function withCORS(json: any, status = 200) {
+  return NextResponse.json(json, { status, headers: corsHeaders });
+}
+
+// ✅ OPTIONS (CORS preflight)
 export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+  return withCORS({});
 }
 
 // ✅ GET → Fetch all students
 export async function GET() {
+  console.log("📡 GET /api/students");
   try {
     await connectToDatabase();
     const students = await Student.find();
-    return NextResponse.json(students, { headers: corsHeaders });
+    return withCORS(students);
   } catch (error) {
     console.error("❌ GET error:", error);
-    return NextResponse.json(
-      { success: false, message: "Failed to fetch students" },
-      { status: 500, headers: corsHeaders }
-    );
+    return withCORS({ success: false, message: "Failed to fetch students" }, 500);
   }
 }
 
 // ✅ POST → Add new student
 export async function POST(req: Request) {
+  console.log("🟢 POST /api/students");
   try {
     await connectToDatabase();
     const body = await req.json();
@@ -45,39 +51,26 @@ export async function POST(req: Request) {
 
     await newStudent.save();
 
-    return NextResponse.json(
-      { success: true, student: newStudent },
-      { headers: corsHeaders }
-    );
+    return withCORS({ success: true, student: newStudent });
   } catch (error) {
     console.error("❌ POST error:", error);
-    return NextResponse.json(
-      { success: false, message: "Failed to add student" },
-      { status: 500, headers: corsHeaders }
-    );
+    return withCORS({ success: false, message: "Failed to add student" }, 500);
   }
 }
 
-// ✅ PUT → Update github/status (Admin updates)
+// ✅ PUT → Admin updates (status or GitHub)
 export async function PUT(req: Request) {
+  console.log("🟠 PUT /api/students");
   try {
     await connectToDatabase();
     const body = await req.json();
 
     const existing = await Student.findById(body.id);
-    if (!existing) {
-      return NextResponse.json(
-        { success: false, message: "Student not found" },
-        { status: 404, headers: corsHeaders }
-      );
-    }
+    if (!existing) return withCORS({ success: false, message: "Student not found" }, 404);
 
-    // 🔒 GitHub lock — cannot overwrite once set
+    // 🔒 Prevent overwriting GitHub
     if (body.github && existing.github?.trim()) {
-      return NextResponse.json(
-        { success: false, message: "GitHub ID already locked 🔒" },
-        { status: 400, headers: corsHeaders }
-      );
+      return withCORS({ success: false, message: "GitHub ID already locked 🔒" }, 400);
     }
 
     if (body.github) existing.github = body.github;
@@ -85,39 +78,32 @@ export async function PUT(req: Request) {
 
     await existing.save();
 
-    return NextResponse.json(
-      { success: true, student: existing },
-      { headers: corsHeaders }
-    );
+    return withCORS({ success: true, student: existing });
   } catch (error) {
     console.error("❌ PUT error:", error);
-    return NextResponse.json(
-      { success: false, message: "Failed to update student" },
-      { status: 500, headers: corsHeaders }
-    );
+    return withCORS({ success: false, message: "Failed to update student" }, 500);
   }
 }
 
 // ✅ DELETE → Remove student
 export async function DELETE(req: Request) {
+  console.log("🧨 DELETE /api/students");
   try {
     await connectToDatabase();
     const { id } = await req.json();
     const deleted = await Student.findByIdAndDelete(id);
 
-    if (!deleted) {
-      return NextResponse.json(
-        { success: false, message: "Student not found" },
-        { status: 404, headers: corsHeaders }
-      );
-    }
-
-    return NextResponse.json({ success: true }, { headers: corsHeaders });
+    if (!deleted) return withCORS({ success: false, message: "Student not found" }, 404);
+    return withCORS({ success: true });
   } catch (error) {
     console.error("❌ DELETE error:", error);
-    return NextResponse.json(
-      { success: false, message: "Failed to delete student" },
-      { status: 500, headers: corsHeaders }
-    );
+    return withCORS({ success: false, message: "Failed to delete student" }, 500);
   }
 }
+
+// ✅ Ensure Vercel preserves headers
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};

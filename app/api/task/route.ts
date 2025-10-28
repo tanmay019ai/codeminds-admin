@@ -2,54 +2,66 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import mongoose from "mongoose";
 
+// ✅ Update to your actual student panel domain
+const ALLOWED_ORIGIN = "https://codeminds-student-panel.vercel.app";
+
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*", // later: set to "https://codeminds-student-panel.vercel.app"
+  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
   "Access-Control-Allow-Methods": "GET, PATCH, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-// ✅ Schema for single global task
+// ✅ Helper to add CORS headers safely
+function withCORS(json: any, status = 200) {
+  return NextResponse.json(json, { status, headers: corsHeaders });
+}
+
+// ✅ Define schema (singleton global task)
 const taskSchema = new mongoose.Schema({
   currentTask: { type: String, required: true },
 });
 
 const Task = mongoose.models.Task || mongoose.model("Task", taskSchema);
 
-// ✅ Handle preflight
+// ✅ Handle OPTIONS preflight
 export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+  return withCORS({});
 }
 
-// ✅ GET current global task
+// ✅ GET → Fetch current task
 export async function GET() {
   console.log("📡 GET /api/task called");
   try {
     await connectToDatabase();
     const task = await Task.findOne();
-    return NextResponse.json(
-      task || { currentTask: "No task set" },
-      { headers: corsHeaders }
-    );
+    return withCORS(task || { currentTask: "No task set" });
   } catch (error) {
     console.error("❌ GET /api/task error:", error);
-    return NextResponse.json(
+    return withCORS(
       { success: false, message: "Failed to fetch current task" },
-      { status: 500, headers: corsHeaders }
+      500
     );
   }
 }
 
-// ✅ PATCH to update the current global task
+// ✅ PATCH → Update current global task
 export async function PATCH(req: Request) {
   console.log("🟠 PATCH /api/task called");
+
   try {
     await connectToDatabase();
+  } catch (err) {
+    console.error("❌ Database connection failed:", err);
+    return withCORS({ success: false, message: "DB connection error" }, 500);
+  }
+
+  try {
     const { currentTask } = await req.json();
 
     if (!currentTask?.trim()) {
-      return NextResponse.json(
+      return withCORS(
         { success: false, message: "Task cannot be empty" },
-        { status: 400, headers: corsHeaders }
+        400
       );
     }
 
@@ -60,15 +72,19 @@ export async function PATCH(req: Request) {
     );
 
     console.log("✅ Task updated:", updated);
-    return NextResponse.json(
-      { success: true, task: updated },
-      { headers: corsHeaders }
-    );
+    return withCORS({ success: true, task: updated });
   } catch (error) {
     console.error("❌ PATCH /api/task error:", error);
-    return NextResponse.json(
+    return withCORS(
       { success: false, message: "Failed to update task" },
-      { status: 500, headers: corsHeaders }
+      500
     );
   }
 }
+
+// ✅ Required so Next.js doesn't strip headers on serverless deploys
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
