@@ -27,6 +27,7 @@ export async function PATCH(req: Request, context: any) {
 
   try {
     await connectToDatabase();
+    console.log("✅ Database connected");
   } catch (err) {
     console.error("❌ Database connection failed:", err);
     return withCORS({ success: false, message: "DB connection error" }, 500);
@@ -36,8 +37,25 @@ export async function PATCH(req: Request, context: any) {
     const body = await req.json();
     console.log("📦 Request body:", body);
 
+    // 🧾 Log all current student IDs to debug
+    const allStudents = await Student.find({}, "_id name status github");
+    console.log(
+      "🧾 Existing students in DB:",
+      allStudents.map((s) => ({
+        id: s._id.toString(),
+        name: s.name,
+        status: s.status,
+        github: s.github,
+      }))
+    );
+
     const existing = await Student.findById(id);
-    if (!existing) return withCORS({ success: false, message: "Student not found" }, 404);
+    if (!existing) {
+      console.warn("⚠️ Student not found for ID:", id);
+      return withCORS({ success: false, message: "Student not found" }, 404);
+    }
+
+    console.log("✅ Found student:", existing._id.toString(), existing.name);
 
     // 🔒 GitHub lock
     if (body.github && existing.github?.trim() !== "") {
@@ -89,7 +107,10 @@ export async function DELETE(req: Request, context: any) {
 
   try {
     const deleted = await Student.findByIdAndDelete(id);
-    if (!deleted) return withCORS({ success: false, message: "Student not found" }, 404);
+    if (!deleted) {
+      console.warn("⚠️ Student not found for DELETE:", id);
+      return withCORS({ success: false, message: "Student not found" }, 404);
+    }
 
     console.log("🗑️ Deleted student:", deleted._id);
     return withCORS({ success: true, deleted });
@@ -99,9 +120,6 @@ export async function DELETE(req: Request, context: any) {
   }
 }
 
-// ✅ Fallback: ensure all responses have CORS
 export const config = {
-  api: {
-    bodyParser: false,
-  },
+  api: { bodyParser: false },
 };
