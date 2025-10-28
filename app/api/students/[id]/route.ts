@@ -3,6 +3,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import Student from "@/lib/models/Student";
 
 const ALLOWED_ORIGIN = "https://codeminds-student-panel.vercel.app";
+console.log("🚦 Loaded → /api/students/[id]/route.ts");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": ALLOWED_ORIGIN,

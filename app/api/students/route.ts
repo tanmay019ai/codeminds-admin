@@ -3,7 +3,8 @@ import { connectToDatabase } from "@/lib/mongodb";
 import Student from "@/lib/models/Student";
 
 // 🧭 DEBUG HEADER
-console.log("🚦 [INIT] /api/students/route.ts LOADED ✅ (root students route)");
+console.log("🚦 Loaded → /api/students/route.ts");
+
 
 const ALLOWED_ORIGIN = "https://codeminds-student-panel.vercel.app";
 
