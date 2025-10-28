@@ -3,19 +3,19 @@ import { connectToDatabase } from "@/lib/mongodb";
 import Student from "@/lib/models/Student";
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": "*", // later: "https://codeminds-student-panel.vercel.app"
   "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-// ✅ Handle preflight (CORS)
+// ✅ Handle CORS preflight
 export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });
 }
 
-// ✅ PATCH → update student by ID (GitHub + Status control)
+// ✅ PATCH → update student by ID
 export async function PATCH(req: Request, context: any) {
-  const { id } = await context.params;
+  const { id } = context.params; // ✅ no await here
   console.log("🟠 PATCH /api/students/[id] called, id =", id);
 
   await connectToDatabase();
@@ -32,19 +32,16 @@ export async function PATCH(req: Request, context: any) {
       );
     }
 
-    // 🔒 1. Prevent overwriting GitHub once set
-    if (body.github && existing.github.trim() !== "") {
+    // 🔒 Prevent overwriting GitHub once set
+    if (body.github && existing.github?.trim() !== "") {
       return NextResponse.json(
         { success: false, message: "GitHub ID already locked 🔒" },
         { status: 400, headers: corsHeaders }
       );
     }
 
-    // 🔒 2. Prevent reverting status backwards
-    if (
-      existing.status === "underReview" &&
-      body.status === "pending"
-    ) {
+    // 🔒 Prevent reverting status backwards
+    if (existing.status === "underReview" && body.status === "pending") {
       return NextResponse.json(
         { success: false, message: "Cannot revert to pending" },
         { status: 400, headers: corsHeaders }
@@ -58,7 +55,7 @@ export async function PATCH(req: Request, context: any) {
       );
     }
 
-    // 🔒 3. Prevent skipping directly to reviewed from pending
+    // 🔒 Prevent skipping directly from pending → reviewed
     if (existing.status === "pending" && body.status === "reviewed") {
       return NextResponse.json(
         {
@@ -91,7 +88,10 @@ export async function PATCH(req: Request, context: any) {
     await existing.save();
 
     console.log("✅ Student updated successfully:", existing._id);
-    return NextResponse.json({ success: true, student: existing }, { headers: corsHeaders });
+    return NextResponse.json(
+      { success: true, student: existing },
+      { headers: corsHeaders }
+    );
   } catch (error) {
     console.error("💥 PATCH error:", error);
     return NextResponse.json(
@@ -101,9 +101,9 @@ export async function PATCH(req: Request, context: any) {
   }
 }
 
-// ✅ DELETE → remove a student by ID
+// ✅ DELETE → remove student by ID
 export async function DELETE(req: Request, context: any) {
-  const { id } = await context.params;
+  const { id } = context.params;
   console.log("🧨 DELETE /api/students/[id], id =", id);
 
   await connectToDatabase();
@@ -118,7 +118,10 @@ export async function DELETE(req: Request, context: any) {
     }
 
     console.log("🗑️ Deleted student:", deleted._id);
-    return NextResponse.json({ success: true, deleted }, { headers: corsHeaders });
+    return NextResponse.json(
+      { success: true, deleted },
+      { headers: corsHeaders }
+    );
   } catch (error) {
     console.error("💥 DELETE error:", error);
     return NextResponse.json(
