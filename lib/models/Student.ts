@@ -1,4 +1,3 @@
-// lib/models/Student.ts
 import mongoose, { Schema, models } from "mongoose";
 
 const StudentSchema = new Schema({
@@ -6,7 +5,7 @@ const StudentSchema = new Schema({
   task: { type: String, required: true },
   deadline: { type: String, required: true },
   github: { type: String, default: "" },
-  status: { type: String, default: "pending" }, // pending → under review → reviewed
+  status: { type: String, default: "pending" }, 
 });
 
 const Student = models.Student || mongoose.model("Student", StudentSchema);

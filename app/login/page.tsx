@@ -10,7 +10,6 @@ export default function AdminLogin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // 🧠 Replace with your actual admin credentials here:
   const ADMIN_EMAIL = "admin@codeminds.com";
   const ADMIN_PASSWORD = "codeminds@123";
 
