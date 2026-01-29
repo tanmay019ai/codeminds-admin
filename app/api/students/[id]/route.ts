@@ -14,22 +14,21 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-// ✅ Helper: wrap all responses with CORS
+
 function withCORS(json: any, status = 200) {
   return NextResponse.json(json, { status, headers: corsHeaders });
 }
 
-// ✅ OPTIONS → preflight
+
 export async function OPTIONS() {
   return withCORS({});
 }
 
-// ✅ PATCH → Update student by ID
 export async function PATCH(req: Request, context: any) {
   console.log("🟠 PATCH /api/students/[id] called");
   console.log("🧩 context:", context);
 
-  // 🧭 Extract ID safely — fallback if context.params.id missing
+
   const id =
     context?.params?.id ||
     req.url.split("/students/")[1]?.split("?")[0]?.trim();
@@ -61,7 +60,7 @@ export async function PATCH(req: Request, context: any) {
 
     console.log("✅ Found student:", existing._id.toString(), existing.name);
 
-    // 🔒 Prevent overwriting locked fields
+
     if (body.github && existing.github?.trim() !== "") {
       return withCORS(
         { success: false, message: "GitHub ID already locked 🔒" },
@@ -85,8 +84,6 @@ export async function PATCH(req: Request, context: any) {
 
     if (!allowed)
       return withCORS({ success: false, message: "Invalid status transition" }, 400);
-
-    // ✅ Update
     if (body.github) existing.github = body.github;
     if (body.status) existing.status = body.status;
 
@@ -100,7 +97,7 @@ export async function PATCH(req: Request, context: any) {
   }
 }
 
-// ✅ DELETE → remove student by ID
+
 export async function DELETE(req: Request, context: any) {
   console.log("🧨 DELETE /api/students/[id] called");
   console.log("🧩 context:", context);
